@@ -14,6 +14,7 @@ while True:
 
         newConnection = SocketConnection(c)
         newConnection.checkUsername()
+        newConnection.initialMovement()
         newConnection.movement()
 
         c.close()

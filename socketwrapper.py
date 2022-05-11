@@ -103,14 +103,20 @@ class SocketConnection:
         print("Coordinates are: {}".format(coordinates))
         return coordinates
 
-    def updatecord(self,loc):
+    def updatecord(self, loc):
         self.icord = self.fcord
         self.fcord = self.getCoordinates(loc)
-        # if self.icord == self.fcord:
-        #     self.sock.sendall(Messages.SERVER_TURN_RIGHT.encode())
-        #     next(self.recvMessage())
-        #     self.sock.sendall(Messages.SERVER_MOVE.encode())
-        #     next(self.recvMessage())
+
+    def checkObstacle(self):
+        if self.icord == self.fcord:
+            self.sock.sendall(Messages.SERVER_TURN_LEFT.encode())
+            self.dir = (self.dir + 1) % 4
+            next(self.recvMessage())
+            self.sock.sendall(Messages.SERVER_MOVE.encode())
+            CoordinateGetter = self.recvMessage()
+            loc = next(CoordinateGetter)
+            self.getCoordinates(loc)
+            self.updatecord(loc)
 
     def moveEast(self):
         if self.dir == Messages.NORTH:
@@ -136,6 +142,7 @@ class SocketConnection:
         self.dir = Messages.EAST
         self.getCoordinates(self.east)
         self.updatecord(self.east)
+        self.checkObstacle()
 
     def moveWest(self):
         if self.dir == Messages.NORTH:
@@ -161,6 +168,7 @@ class SocketConnection:
         self.dir = Messages.WEST
         self.getCoordinates(self.west)
         self.updatecord(self.west)
+        self.checkObstacle()
 
     def moveNorth(self):
         if self.dir == Messages.NORTH:
@@ -186,6 +194,7 @@ class SocketConnection:
         self.dir = Messages.NORTH
         self.getCoordinates(self.north)
         self.updatecord(self.north)
+        self.checkObstacle()
 
     def moveSouth(self):
         if self.dir == Messages.NORTH:
@@ -211,15 +220,9 @@ class SocketConnection:
         self.dir = Messages.SOUTH
         self.getCoordinates(self.south)
         self.updatecord(self.south)
+        self.checkObstacle()
 
-    def movement(self):
-        for i in range(2):
-            self.sock.sendall(Messages.SERVER_MOVE.encode())
-            locationGetter = self.recvMessage()
-            self.loc = next(locationGetter)
-            self.icord = self.fcord
-            self.fcord = self.getCoordinates(self.loc)
-
+    def direction(self):
         diff = []
         a = int(self.fcord[0]) - int(self.icord[0])
         diff.append(a)
@@ -229,15 +232,31 @@ class SocketConnection:
         if (diff == [1, 0]):
             print("Direction is East")
             self.dir = Messages.EAST
-        if (diff == [-1, 0]):
+        elif (diff == [-1, 0]):
             print("Direction is West")
             self.dir = Messages.WEST
-        if (diff == [0, 1]):
+        elif (diff == [0, 1]):
             print("Direction is South")
             self.dir = Messages.NORTH
-        if (diff == [0, -1]):
+        elif (diff == [0, -1]):
             print("Direction is North!")
             self.dir = Messages.SOUTH
+        else:
+            self.sock.sendall(Messages.SERVER_TURN_LEFT.encode())
+            next(self.recvMessage())
+            self.initialMovement()
+
+    def initialMovement(self):
+        for i in range(2):
+            self.sock.sendall(Messages.SERVER_MOVE.encode())
+            locationGetter = self.recvMessage()
+            self.loc = next(locationGetter)
+            self.icord = self.fcord
+            self.fcord = self.getCoordinates(self.loc)
+        self.direction()
+
+    def movement(self):
+
 
         while self.fcord != [0, 0]:
 

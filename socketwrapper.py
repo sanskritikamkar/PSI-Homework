@@ -43,6 +43,11 @@ class SocketConnection:
                     self.message = self.message[find_seq + 2:]
                     yield full_message
 
+    def checkUnexpectedSpace(self):
+        if coordinates.count(' ') > 1:
+            self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
+            raise RuntimeError()
+
     def checkUsername(self):
         nextMessageGetter = self.recvMessage()
         self.username = next(nextMessageGetter)
@@ -69,7 +74,7 @@ class SocketConnection:
         if (self.clientkey < 0) or (self.clientkey > 4):
             self.sock.sendall(Messages.SERVER_KEY_OUT_OF_RANGE_ERROR.encode())
             raise RuntimeError()
-
+        if()
         self.username = self.username[:-2]
         ascii_value = 0
         for i in self.username:
@@ -87,10 +92,9 @@ class SocketConnection:
             raise RuntimeError()
 
         for i in self.checkkey:
-            if i ==' ':
+            if i == ' ':
                 self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
                 raise RuntimeError()
-
 
         clienthash = (hash + clientAuthKeys[int(self.clientkey)]) % 65536
         print(clienthash)
@@ -109,7 +113,11 @@ class SocketConnection:
         coordinates = []
         print("Coordinates are: {}".format(actual_coordinates))
         for item in actual_coordinates:
+            if '.' in item:
+                self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
+                raise RuntimeError()
             coordinates.append(int(item))
+
         print("Coordinates are: {}".format(coordinates))
         return coordinates
 

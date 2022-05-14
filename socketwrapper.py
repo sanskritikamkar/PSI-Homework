@@ -71,17 +71,27 @@ class SocketConnection:
             raise RuntimeError()
 
         self.username = self.username[:-2]
-        a = 0
+        ascii_value = 0
         for i in self.username:
-            a = a + ord(i)
+            ascii_value = ascii_value + ord(i)
 
-        hash = (a * 1000) % 65536
+        hash = (ascii_value * 1000) % 65536
         print(hash)
         serverhash = hash + serverAuthKeys[int(self.clientkey)] % 65536
         print(serverhash)
         self.sock.sendall((str(serverhash) + "\a\b").encode())
         clienthashGetter = self.recvMessage()
         self.checkkey = next(clienthashGetter)
+        if len(self.checkkey[:-2]) == 6:
+            self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
+            raise RuntimeError()
+
+        for i in self.checkkey:
+            if i ==' ':
+                self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
+                raise RuntimeError()
+
+
         clienthash = (hash + clientAuthKeys[int(self.clientkey)]) % 65536
         print(clienthash)
         if ((str(clienthash) + "\a\b")) == self.checkkey:
@@ -224,10 +234,10 @@ class SocketConnection:
 
     def direction(self):
         diff = []
-        a = int(self.fcord[0]) - int(self.icord[0])
-        diff.append(a)
-        b = int(self.fcord[1]) - int(self.icord[1])
-        diff.append(b)
+        x = int(self.fcord[0]) - int(self.icord[0])
+        diff.append(x)
+        y = int(self.fcord[1]) - int(self.icord[1])
+        diff.append(y)
 
         if (diff == [1, 0]):
             print("Direction is East")
@@ -256,7 +266,6 @@ class SocketConnection:
         self.direction()
 
     def movement(self):
-
 
         while self.fcord != [0, 0]:
 

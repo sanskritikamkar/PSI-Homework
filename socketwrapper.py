@@ -2,6 +2,8 @@
 import select
 
 import Messages
+import datetime
+from Messages import *
 
 serverAuthKeys = [23019, 32037, 18789, 16443, 18189]
 clientAuthKeys = [32037, 29295, 13603, 29533, 21952]
@@ -11,8 +13,8 @@ class SocketConnection:
 
     def __init__(self, connection):
         self.sock = connection
-        self.icord = None
-        self.fcord = None
+        self.initial_coordinates= None
+        self.final_coordinates = None
         self.dir = None
         self.message = self.sock.recv(1024).decode()
         self.username = None
@@ -25,34 +27,65 @@ class SocketConnection:
         self.loc = None
         self.sock.settimeout(1)
 
-    def recvMessage(self,maxlength=7):
-        # check if you have some message until end seq in self.message
+    def robot_recharging(self):
+        self.sock.settimeout(5)
+        endTime = datetime.datetime.now() + datetime.timedelta(seconds=5)
+        while True:
+            if datetime.datetime.now() >= endTime:
+                break
+            rechargemessageGetter = next(self.recvMessage())
+            state = rechargemessageGetter
+            if state == "FULL POWER\a\b":
+                return
+            elif state == "":
+                return
+            else:
+                self.sock.sendall(Messages.SERVER_LOGIC_ERROR.encode())
+                raise RuntimeError
+        print("Didn't receive anything after recharging")
+        raise RuntimeError
+
+    def recvMessage(self, maxlength=13):
+
         if "\a\b" in self.message:
             find_seq = self.message.find("\a\b")
             full_message = self.message[:find_seq + 2]
             self.message = self.message[find_seq + 2:]
-            yield full_message
-        # if yes then return
+
+            temp = full_message
+            if temp == "RECHARGING\a\b":
+                self.robot_recharging()
+                full_message = next(self.recvMessage())
+                yield full_message
+            else:
+                yield full_message
+
+
         else:
+            if len(self.message) > maxlength:
+                self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
+                raise RuntimeError()
+
             while True:
-                temp = self.sock.recv(1024).decode()
-                self.message += temp
-                print(temp)
-                if len(self.message)>maxlength:
-                    print("syntax")
+                if len(self.message) > maxlength:
                     self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
                     raise RuntimeError()
+                temp = self.sock.recv(1024).decode()
+                self.message += temp
 
                 while self.message.count("\a\b") > 0:
 
                     find_seq = self.message.find("\a\b")
                     full_message = self.message[:find_seq + 2]
                     self.message = self.message[find_seq + 2:]
-                    yield full_message
 
-    #def checkMaxLength(self,maxlength=7):
-
-
+                    temp = full_message
+                    if temp == "RECHARGING\a\b":
+                        self.robot_recharging()
+                        full_message = next(self.recvMessage())
+                        yield full_message
+                    else:
+                        yield full_message
 
     def checkUsername(self):
 
@@ -66,7 +99,7 @@ class SocketConnection:
             raise RuntimeError()
 
         self.sock.sendall(Messages.SERVER_KEY_REQUEST.encode())
-        clientkeyGetter = self.recvMessage()
+        clientkeyGetter = self.recvMessage(Messages.CLIENT_KEY_ID)
         self.clientkey = next(clientkeyGetter)
         self.clientkey = self.clientkey[:-2]
 
@@ -111,8 +144,6 @@ class SocketConnection:
             self.sock.sendall(Messages.SERVER_LOGIN_FAILED.encode())
             raise RuntimeError()
 
-        print("Authentication Complete!")
-
     def getCoordinates(self, coordinates):
         coordinates = coordinates[:-2]
         if coordinates[-1] == ' ':
@@ -133,12 +164,12 @@ class SocketConnection:
         print("Coordinates are: {}".format(coordinates))
         return coordinates
 
-    def updatecord(self, loc):
-        self.icord = self.fcord
-        self.fcord = self.getCoordinates(loc)
+    def updateCoordinates(self, loc):
+        self.initial_coordinates = self.final_coordinates
+        self.final_coordinates = self.getCoordinates(loc)
 
     def checkObstacle(self):
-        if self.icord == self.fcord:
+        if self.initial_coordinates == self.final_coordinates:
             self.sock.sendall(Messages.SERVER_TURN_LEFT.encode())
             self.dir = (self.dir + 1) % 4
             next(self.recvMessage())
@@ -146,7 +177,7 @@ class SocketConnection:
             CoordinateGetter = self.recvMessage()
             loc = next(CoordinateGetter)
             self.getCoordinates(loc)
-            self.updatecord(loc)
+            self.updateCoordinates(loc)
 
     def moveEast(self):
         if self.dir == Messages.NORTH:
@@ -171,7 +202,7 @@ class SocketConnection:
         self.east = next(eastMover)
         self.dir = Messages.EAST
         self.getCoordinates(self.east)
-        self.updatecord(self.east)
+        self.updateCoordinates(self.east)
         self.checkObstacle()
 
     def moveWest(self):
@@ -197,7 +228,7 @@ class SocketConnection:
         self.west = next(westMover)
         self.dir = Messages.WEST
         self.getCoordinates(self.west)
-        self.updatecord(self.west)
+        self.updateCoordinates(self.west)
         self.checkObstacle()
 
     def moveNorth(self):
@@ -223,7 +254,7 @@ class SocketConnection:
         self.north = next(northMover)
         self.dir = Messages.NORTH
         self.getCoordinates(self.north)
-        self.updatecord(self.north)
+        self.updateCoordinates(self.north)
         self.checkObstacle()
 
     def moveSouth(self):
@@ -249,26 +280,26 @@ class SocketConnection:
         self.south = next(southMover)
         self.dir = Messages.SOUTH
         self.getCoordinates(self.south)
-        self.updatecord(self.south)
+        self.updateCoordinates(self.south)
         self.checkObstacle()
 
     def direction(self):
-        diff = []
-        x = int(self.fcord[0]) - int(self.icord[0])
-        diff.append(x)
-        y = int(self.fcord[1]) - int(self.icord[1])
-        diff.append(y)
+        difference = []
+        x = int(self.final_coordinates[0]) - int(self.initial_coordinates[0])
+        difference.append(x)
+        y = int(self.final_coordinates[1]) - int(self.initial_coordinates[1])
+        difference.append(y)
 
-        if (diff == [1, 0]):
+        if (difference == [1, 0]):
             print("Direction is East")
             self.dir = Messages.EAST
-        elif (diff == [-1, 0]):
+        elif (difference == [-1, 0]):
             print("Direction is West")
             self.dir = Messages.WEST
-        elif (diff == [0, 1]):
+        elif (difference == [0, 1]):
             print("Direction is South")
             self.dir = Messages.NORTH
-        elif (diff == [0, -1]):
+        elif (difference == [0, -1]):
             print("Direction is North!")
             self.dir = Messages.SOUTH
         else:
@@ -281,26 +312,26 @@ class SocketConnection:
             self.sock.sendall(Messages.SERVER_MOVE.encode())
             locationGetter = self.recvMessage()
             self.loc = next(locationGetter)
-            self.icord = self.fcord
-            self.fcord = self.getCoordinates(self.loc)
+            self.initial_coordinates = self.final_coordinates
+            self.final_coordinates = self.getCoordinates(self.loc)
         self.direction()
 
     def movement(self):
 
-        while self.fcord != [0, 0]:
+        while self.final_coordinates != [0, 0]:
 
-            while self.fcord[1] < 0:
+            while self.final_coordinates[1] < 0:
                 self.moveNorth()
 
-            while self.fcord[1] > 0:
+            while self.final_coordinates[1] > 0:
                 self.moveSouth()
 
-            while self.fcord[0] < 0:
+            while self.final_coordinates[0] < 0:
                 self.moveEast()
 
-            while self.fcord[0] > 0:
+            while self.final_coordinates[0] > 0:
                 self.moveWest()
 
         self.sock.sendall(Messages.SERVER_PICK_UP.encode())
-        next(self.recvMessage())
+        next(self.recvMessage(Messages.CLIENT_MESSAGE))
         self.sock.sendall(Messages.SERVER_LOGOUT.encode())

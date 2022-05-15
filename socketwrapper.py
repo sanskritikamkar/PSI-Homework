@@ -151,7 +151,6 @@ class SocketConnection:
             raise RuntimeError()
 
         coordinates = coordinates.split()
-        print(coordinates)
         actual_coordinates = coordinates[1:]
         coordinates = []
         print("Coordinates are: {}".format(actual_coordinates))

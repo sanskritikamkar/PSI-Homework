@@ -25,7 +25,7 @@ class SocketConnection:
         self.loc = None
         self.sock.settimeout(1)
 
-    def recvMessage(self):
+    def recvMessage(self,maxlength=7):
         # check if you have some message until end seq in self.message
         if "\a\b" in self.message:
             find_seq = self.message.find("\a\b")
@@ -37,21 +37,28 @@ class SocketConnection:
             while True:
                 temp = self.sock.recv(1024).decode()
                 self.message += temp
+                print(temp)
+                if len(self.message)>maxlength:
+                    print("syntax")
+                    self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
+                    raise RuntimeError()
+
                 while self.message.count("\a\b") > 0:
+
                     find_seq = self.message.find("\a\b")
                     full_message = self.message[:find_seq + 2]
                     self.message = self.message[find_seq + 2:]
                     yield full_message
 
-    def checkUnexpectedSpace(self):
-        if coordinates.count(' ') > 1:
-            self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
-            raise RuntimeError()
+    #def checkMaxLength(self,maxlength=7):
+
+
 
     def checkUsername(self):
-        nextMessageGetter = self.recvMessage()
+
+        nextMessageGetter = self.recvMessage(Messages.CLIENT_USERNAME)
         self.username = next(nextMessageGetter)
-        print(self.username)
+
         print(len(self.username))
 
         if len(self.username) > 20:
@@ -74,7 +81,7 @@ class SocketConnection:
         if (self.clientkey < 0) or (self.clientkey > 4):
             self.sock.sendall(Messages.SERVER_KEY_OUT_OF_RANGE_ERROR.encode())
             raise RuntimeError()
-        if()
+
         self.username = self.username[:-2]
         ascii_value = 0
         for i in self.username:
@@ -108,7 +115,12 @@ class SocketConnection:
 
     def getCoordinates(self, coordinates):
         coordinates = coordinates[:-2]
+        if coordinates[-1] == ' ':
+            self.sock.sendall(Messages.SERVER_SYNTAX_ERROR.encode())
+            raise RuntimeError()
+
         coordinates = coordinates.split()
+        print(coordinates)
         actual_coordinates = coordinates[1:]
         coordinates = []
         print("Coordinates are: {}".format(actual_coordinates))
